@@ -1,8 +1,7 @@
 import os
+import logging
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -12,15 +11,12 @@ from telegram.ext import (
     filters,
 )
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("BOT_TOKEN")
-
-if not TOKEN:
-    raise RuntimeError("BOT_TOKEN не найден")
-
+TOKEN = os.environ["BOT_TOKEN"]
 
 app = FastAPI()
-
 
 telegram_app = (
     Application.builder()
@@ -30,22 +26,20 @@ telegram_app = (
 )
 
 
-async def start(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-    await update.message.reply_text(
-        "Привет! 👋"
-    )
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Получена команда /start")
+
+    if update.message:
+        await update.message.reply_text("Привет! 👋")
 
 
-async def echo(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE,
-):
-    await update.message.reply_text(
-        f"Ты написал: {update.message.text}"
-    )
+async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Получено сообщение: %s", update.message.text)
+
+    if update.message:
+        await update.message.reply_text(
+            f"Ты написал: {update.message.text}"
+        )
 
 
 telegram_app.add_handler(
@@ -55,7 +49,7 @@ telegram_app.add_handler(
 telegram_app.add_handler(
     MessageHandler(
         filters.TEXT & ~filters.COMMAND,
-        echo,
+        echo
     )
 )
 
@@ -64,21 +58,32 @@ telegram_app.add_handler(
 async def root():
     return {
         "status": "ok",
-        "message": "Telegram bot is running",
+        "message": "Bot is running"
     }
 
 
 @app.post("/api/webhook")
 async def webhook(request: Request):
-    data = await request.json()
+    try:
+        data = await request.json()
 
-    update = Update.de_json(
-        data=data,
-        bot=telegram_app.bot,
-    )
+        logger.info("Получен Telegram update")
 
-    await telegram_app.update_queue.put(update)
+        update = Update.de_json(
+            data=data,
+            bot=telegram_app.bot
+        )
 
-    return JSONResponse(
-        content={"ok": True}
-    )
+        # ВАЖНО:
+        # Обрабатываем update непосредственно здесь,
+        # а не кладём его в очередь.
+        await telegram_app.process_update(update)
+
+        return {"ok": True}
+
+    except Exception:
+        logger.exception("Ошибка обработки webhook")
+
+        return {
+            "ok": False
+        }
