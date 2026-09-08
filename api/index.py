@@ -34,9 +34,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info("Получено сообщение: %s", update.message.text)
-
     if update.message:
+        logger.info("Получено сообщение: %s", update.message.text)
+
         await update.message.reply_text(
             f"Ты написал: {update.message.text}"
         )
@@ -54,17 +54,35 @@ telegram_app.add_handler(
 )
 
 
+_initialized = False
+
+
+async def initialize_bot():
+    global _initialized
+
+    if not _initialized:
+        logger.info("Инициализация Telegram Application...")
+
+        await telegram_app.initialize()
+
+        _initialized = True
+
+        logger.info("Telegram Application инициализирован")
+
+
 @app.get("/")
 async def root():
     return {
         "status": "ok",
-        "message": "Bot is running"
+        "message": "Telegram bot is running"
     }
 
 
 @app.post("/api/webhook")
 async def webhook(request: Request):
     try:
+        await initialize_bot()
+
         data = await request.json()
 
         logger.info("Получен Telegram update")
@@ -74,12 +92,13 @@ async def webhook(request: Request):
             bot=telegram_app.bot
         )
 
-        # ВАЖНО:
-        # Обрабатываем update непосредственно здесь,
-        # а не кладём его в очередь.
         await telegram_app.process_update(update)
 
-        return {"ok": True}
+        logger.info("Update обработан")
+
+        return {
+            "ok": True
+        }
 
     except Exception:
         logger.exception("Ошибка обработки webhook")
