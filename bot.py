@@ -1,5 +1,6 @@
 import os
 
+from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -8,6 +9,8 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+load_dotenv()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
